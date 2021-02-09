@@ -1,4 +1,14 @@
-﻿CREATE TABLE `pk_casas` (
+﻿INSERT INTO `addon_account` (name, label, shared) VALUES
+  ('property_black_money','Dinheiro Sujo',0);
+
+INSERT INTO `addon_inventory` (name, label, shared) VALUES
+  ('property','Propriedade',0);
+
+INSERT INTO `datastore` (name, label, shared) VALUES
+  ('property','Propriedade',0);
+
+ 
+ CREATE TABLE `pk_casas` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `propietarioID` varchar(255) DEFAULT NULL,
   `propietarioNombre` varchar(255) DEFAULT NULL,
