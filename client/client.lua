@@ -922,7 +922,7 @@ Citizen.CreateThread(function()
 						DrawSubtitleTimed(1000, 1)
 						if IsControlJustPressed(1, 38) then
 							TriggerServerEvent('pk_casas:checkcasa',j.positionFrom.nom)
-							TriggerEvent('pk_casas:atualiza',j.positionFrom.nom)
+							--TriggerEvent('pk_casas:atualiza',j.positionFrom.nom)
 							Citizen.Wait(150)
 							if propietario == 0 then
 								AbrirMenuNoPropietario(j.positionFrom.nom,j.positionFrom.precio,j.positionTo.x, j.positionTo.y, j.positionTo.z,  'Visitar')
@@ -1288,7 +1288,7 @@ local pos = GetEntityCoords(GetPlayerPed(-1), true)
 				Citizen.Wait(500)
 				TriggerServerEvent('pk_casas:checkcasa',casanombre)
 			elseif estado == 0 then
-				exports['mythic_notify']:SendAlert('error', 'A propriedade já se encontra fechada!')
+				exports['mythic_notify']:SendAlert('error', 'Propriedade fechada!')
 			end
 			menu.close()
 		else
@@ -1400,7 +1400,7 @@ local pos = GetEntityCoords(GetPlayerPed(-1), true)
 				end
 			elseif estado == 0 then
 				--TriggerEvent('chatMessage', 'PROPIEDAD', {255, 0, 0},"La casa esta Fechada.")
-				exports['mythic_notify']:SendAlert('error', 'A propriedade já se encontra fechada!')
+				exports['mythic_notify']:SendAlert('error', 'Propriedade fechada!')
 			end
 			menu.close()
 		else
