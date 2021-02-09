@@ -3,36 +3,52 @@ ESX = nil
 TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
 
 local spawneados = false
+local estadopuerta = 0
+local propietarioid = nil
+local propietarionombre = nil
+local venta = 0
 
+
+-- funcao para atualizar propriedades (menu porta)
 RegisterServerEvent('pk_casas:checkcasa')
 AddEventHandler('pk_casas:checkcasa', function(nombrecasa)
 local source = source
+--[[MySQL.Async.fetchAll('SELECT * FROM pk_casas WHERE `propiedad` = @propiedad' , {['@propiedad'] = nombrecasa}, function(result)
+        if result[1] ~= nil then
+            for k, v in pairs(result) do
+                estadopuerta = v.estado
+				propietarioid = v.propietarioID
+				propietarionombre = v.propietarionombre
+				--garage = v.garage
+				--vehicle = v.vehicle
+				venta = v.enventa
+				--coords = v.cordsvehiculo
+            end
+        else
+            TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'Error ', text = ('Propriedade não encontrada.')})
+        end
+    end)]]
 local estadopuerta = MySQL.Sync.fetchScalar("SELECT estado FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
 local propietarioid = MySQL.Sync.fetchScalar("SELECT propietarioID FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
 local propietarionombre = MySQL.Sync.fetchScalar("SELECT propietarioNombre FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
-local garage = MySQL.Sync.fetchScalar("SELECT cochera FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
-local vehicle = MySQL.Sync.fetchScalar("SELECT vehicle FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
-local armas = MySQL.Sync.fetchScalar("SELECT ArmarioArmas FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
-local dinero = MySQL.Sync.fetchScalar("SELECT ArmarioDinero FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
-local items = MySQL.Sync.fetchScalar("SELECT ArmarioItems FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
 local venta = MySQL.Sync.fetchScalar("SELECT enventa FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
-
+	
 	if propietarioid == nil then
 		TriggerClientEvent('pk_casas:propietario',source, 0)
-		TriggerClientEvent('pk_casas:mejoras',source, 0,0,0,0,0)
-	elseif propietarioid ~= GetPlayerIdentifiers(source)[1] then 
+		TriggerClientEvent('pk_casas:venda',source, 0)
+	elseif propietarioid ~= GetPlayerIdentifiers(source)[2] then 
 		TriggerClientEvent('pk_casas:propietario',source, 1, propietarionombre)
 		TriggerClientEvent('pk_casas:soyelpropietario',source, 0)
-		TriggerClientEvent('pk_casas:mejoras',source, 0,0,0,0,venta)
+		TriggerClientEvent('pk_casas:venda',source, venta)
 		if estadopuerta == 0 then
 			TriggerClientEvent('pk_casas:estado',source, 0)
 		elseif estadopuerta == 1 then
 			TriggerClientEvent('pk_casas:estado',source, 1)
 		end
-	elseif propietarioid == GetPlayerIdentifiers(source)[1] then
+	elseif propietarioid == GetPlayerIdentifiers(source)[2] then
 		TriggerClientEvent('pk_casas:propietario',source, 1, propietarionombre)
 		TriggerClientEvent('pk_casas:soyelpropietario',source, 1)
-		TriggerClientEvent('pk_casas:mejoras',source, dinero,armas,items,garage,venta)
+		TriggerClientEvent('pk_casas:venda',source, venta)
 		if estadopuerta == 0 then
 			TriggerClientEvent('pk_casas:estado',source, 0)
 		elseif estadopuerta == 1 then
@@ -41,6 +57,18 @@ local venta = MySQL.Sync.fetchScalar("SELECT enventa FROM pk_casas WHERE propied
 	
 		
 	end
+end)
+
+-- Callback para dar de volta as coordenadas de 1 casa para criar blip no mapa
+ESX.RegisterServerCallback('rl_propriedades:ownedhouse',function(source,cb)
+	MySQL.Async.fetchAll('SELECT * FROM pk_casas WHERE `propietarioid` = @propietario' , {['@propietario'] = GetPlayerIdentifiers(source)[2]}, function(result)
+		if result[1] ~= nil then
+            for k, v in pairs(result) do
+				nomecasa = v.propiedad
+            end
+			cb(nomecasa)
+		end
+    end)
 end)
 
 RegisterServerEvent('pk_casas:checkcasacomprada')
@@ -53,7 +81,7 @@ local propietarionombre = MySQL.Sync.fetchScalar("SELECT propietarioNombre FROM 
 
 	if propietarioid == nil then
 		TriggerClientEvent('pk_casas:propietario',-1, 0)
-	elseif propietarioid ~= GetPlayerIdentifiers(source)[1] then 
+	elseif propietarioid ~= GetPlayerIdentifiers(source)[2] then 
 		TriggerClientEvent('pk_casas:propietario',-1, 1, propietarionombre)
 		TriggerClientEvent('pk_casas:soyelpropietario',source, 0)
 		if estadopuerta == 0 then
@@ -61,8 +89,8 @@ local propietarionombre = MySQL.Sync.fetchScalar("SELECT propietarioNombre FROM 
 		elseif estadopuerta == 1 then
 			TriggerClientEvent('pk_casas:estadopuerta',-1, 1)
 		end
-	elseif propietarioid == GetPlayerIdentifiers(source)[1] then
-		TriggerClientEvent('pk_casas:propietario',-1, 1, propietarionombre)
+	elseif propietarioid == GetPlayerIdentifiers(source)[2] then
+		TriggerClientEvent('pk_casas:propietario',-1, 1, propietarionombre, nombrecasa)
 		TriggerClientEvent('pk_casas:soyelpropietario',-1, 1)
 		if estadopuerta == 0 then
 			TriggerClientEvent('pk_casas:estadopuerta',-1, 0)
@@ -77,18 +105,14 @@ AddEventHandler('pk_casas:puerta', function(estado,nombrecasa)
 	local source = source
 	local propietarioid = MySQL.Sync.fetchScalar("SELECT propietarioID FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
 	local puerta = estado
-	if propietarioid ~= GetPlayerIdentifiers(source)[1] then 
-		--TriggerClientEvent("chatMessage", source, "PROPIEDADE ", {255, 0, 0}, "Esta propriedade não lhe pertence.")
+	if propietarioid ~= GetPlayerIdentifiers(source)[2] then 
 		TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'error', text = 'Esta propriedade não lhe pertence!'})
-
-	elseif propietarioid == GetPlayerIdentifiers(source)[1] then
+	elseif propietarioid == GetPlayerIdentifiers(source)[2] then
 		MySQL.Sync.execute("UPDATE pk_casas SET estado = @estado WHERE propiedad = @propiedad", {['@estado'] = puerta,['@propiedad'] = nombrecasa})
 			if estado == 0 then
-				--TriggerClientEvent("chatMessage", source, "PROPIEDADE ", {255, 0, 0}, "Porta trancada!")
 				TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'inform', text = 'Porta trancada!'})
 				TriggerClientEvent('pk_casas:estadopuerta',-1, 0)
 			elseif estado == 1 then
-				--TriggerClientEvent("chatMessage", source, "PROPIEDADE ", {255, 0, 0}, "Porta destrancada!")
 				TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'inform', text = 'Porta destrancada!'})
 				TriggerClientEvent('pk_casas:estadopuerta',-1, 1)
 			end
@@ -99,7 +123,7 @@ RegisterServerEvent('pk_casas:comprarpropiedad')
 AddEventHandler('pk_casas:comprarpropiedad', function(nombrecasa,precio)
 local source = source
 local xPlayer  = ESX.GetPlayerFromId(source)
-local steamid = GetPlayerIdentifiers(source)[1]
+local steamid = GetPlayerIdentifiers(source)[2]
 local barrio = MySQL.Sync.fetchScalar("SELECT barrio FROM pk_casas WHERE propiedad = @propiedad", {['@propiedad'] = nombrecasa})
 local vivebarrio = MySQL.Sync.fetchScalar("SELECT barrio FROM pk_casas WHERE propietarioID = @propietarioID AND barrio = @barrio" , {
 	['@propietarioID'] = steamid,
@@ -108,7 +132,6 @@ local vivebarrio = MySQL.Sync.fetchScalar("SELECT barrio FROM pk_casas WHERE pro
 local nombreplayer = GetPlayerName(source)
 local estado = 1
 local canbuy = 0
-
 	if vivebarrio == barrio then
 		canbuy =  0
 	elseif vivebarrio ~= barrio then
@@ -131,80 +154,33 @@ local canbuy = 0
 	if canbuy == 1 then
 		if sourceXPlayer.getMoney() >= precio then
 			sourceXPlayer.removeMoney(precio)
-			MySQL.Sync.execute("UPDATE pk_casas SET estado = @estado, propietarioID = @propietarioID, propietarioNombre = @propietarioNombre WHERE propiedad = @propiedad", {
+			MySQL.Sync.execute("UPDATE pk_casas SET estado = @estado, propietarioID = @propietarioID, propietarioNombre = @propietarioNombre, enventa = @enventa WHERE propiedad = @propiedad", {
 				['@estado'] = estado, 
 				['@propietarioID'] = steamid,
 				['@propietarioNombre'] = nombreplayer,
+				['@enventa'] = 0,
 				['@propiedad'] = nombrecasa
 			})
 			TriggerEvent('pk_casas:checkcasacomprada', nombrecasa)
-			--TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Felicidades compraste "..nombrecasa.." por $"..precio)
-			exports['mythic_notify']:SendAlert('success', 'Comprou a propriedade' ..nombrecasa.. ' por €'..precio)
+			TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'success', text = 'Comprou a propriedade: ' ..nombrecasa.. '. Valor: € '..precio})
+			TriggerClientEvent('pk_casas:atualiza',nombrecasa)
 		else
-			--TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "No tienes dinero suficiente!")
-			exports['mythic_notify']:SendAlert('error', 'Não tem dinheiro suficiente!')
+			TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'error', text = 'Não tem dinheiro suficiente!'})
 		end
 	else
-		--TriggerClientEvent("chatMessage", source, "Sistema", {255, 0, 0}, "Ya cuentas con una propiedad de este tipo!")
-		exports['mythic_notify']:SendAlert('error', 'Já possui uma proprieade!')
+		TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'error', text = 'Já possui uma proprieade!'})
 	end
 
 end)
 
---[[function registrarCompraCasa(entrega, entreganombre, recive, recivenombre, tipo, cantidad)
-local hour = os.time()
-local tiempo = os.date('%c',hour)
-MySQL.Async.execute("INSERT INTO pk_transacciones (`entrega`,`entreganombre`,`recive`,`recivenombre`,`tipo`,`cantidad`,`hour`) VALUES (@entrega,@entreganombre,@recive,@recivenombre,@tipo,@cantidad,@hour)", {
-entrega = entrega,
-entreganombre = entreganombre,
-recive = recive,
-recivenombre = recivenombre,
-tipo = tipo,
-cantidad = cantidad,
-hour = tiempo})
-end]]
-
-RegisterServerEvent('pk_casas:checkdinero')
-AddEventHandler('pk_casas:checkdinero', function(nombrecasa,tipo,precio)
-local source = source
-local xPlayer  = ESX.GetPlayerFromId(source)
-local steamid = GetPlayerIdentifiers(source)[1]
-local armas = 'armas'
-local garage = 'garage'
-local items = 'items'
-local dinero = 'dinero'
-local comprado = 1
-
-
-	if xPlayer.getMoney() >= precio then
-		xPlayer.removeMoney(precio)
-		if tipo == armas then
-			MySQL.Sync.execute("UPDATE pk_casas SET ArmarioArmas = @ArmarioArmas WHERE propiedad = @propiedad", {['@ArmarioArmas'] = comprado,['@propiedad'] = nombrecasa})
-			TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Felicidades, ahora puedes guardar ARMAS en tu armario")
-		elseif tipo == items then
-			MySQL.Sync.execute("UPDATE pk_casas SET ArmarioItems = @ArmarioItems WHERE propiedad = @propiedad", {['@ArmarioItems'] = comprado,['@propiedad'] = nombrecasa})
-			TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Felicidades, ahora puedes guardar ITEMS en tu armario")
-		elseif tipo == dinero then
-			MySQL.Sync.execute("UPDATE pk_casas SET ArmarioDinero = @ArmarioDinero WHERE propiedad = @propiedad", {['@ArmarioDinero'] = comprado,['@propiedad'] = nombrecasa})
-			TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Felicidades, ahora puedes guardar DINERO SUCIO en tu armario")
-		elseif tipo == garage then
-			MySQL.Sync.execute("UPDATE pk_casas SET cochera = @cochera WHERE propiedad = @propiedad", {['@cochera'] = comprado,['@propiedad'] = nombrecasa})
-			TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Felicidades, ahora puedes guardar un vehiculo en tu garage")
-		end
-		TriggerEvent('pk_casas:checkcasa', nombrecasa)
-	else
-		TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "No tienes dinero suficiente!.")
-	end
-end)
 
 RegisterServerEvent('pk_casas:ponerenventa')
 AddEventHandler('pk_casas:ponerenventa', function(nombrecasa,precio)
 local source = source
 local xPlayer  = ESX.GetPlayerFromId(source)
-local steamid = GetPlayerIdentifiers(source)[1]
+local steamid = GetPlayerIdentifiers(source)[2]
 
 MySQL.Sync.execute("UPDATE pk_casas SET enventa = @enventa WHERE propiedad = @propiedad", {['@enventa'] = precio,['@propiedad'] = nombrecasa})
---TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Acabas de poner en venta tu propiedad por $"..precio)
 TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'success', text = 'Propriedade no mercado por: €'..precio})
 end)
 
@@ -212,425 +188,203 @@ RegisterServerEvent('pk_casas:sacarenventa')
 AddEventHandler('pk_casas:sacarenventa', function(nombrecasa,precio)
 local source = source
 local xPlayer  = ESX.GetPlayerFromId(source)
-local steamid = GetPlayerIdentifiers(source)[1]
+local steamid = GetPlayerIdentifiers(source)[2]
 
 MySQL.Sync.execute("UPDATE pk_casas SET enventa = @enventa WHERE propiedad = @propiedad", {['@enventa'] = precio,['@propiedad'] = nombrecasa})
---TriggerClientEvent("chatMessage", source, "PROPIEDAD", {255, 0, 0}, "Acabas de sacar de la venta a tu propiedad")
 TriggerClientEvent('mythic_notify:client:SendAlert', source, { type = 'success', text = 'Retirou a proprieade do mercado!'})
 end)
-------------------------------- GARAGE ------------------------------
-ESX.RegisterServerCallback('pk_garage:stockv',function(source,cb, vehicleProps)
-	local isFound = false
-	local _source = source
-	local xPlayer = ESX.GetPlayerFromId(_source)
-	local vehicules = getPlayerVehicles(xPlayer.getIdentifier())
-	local plate = vehicleProps.plate
 
-		for _,v in pairs(vehicules) do
-			if(plate == v.plate)then
-				local vehprop = json.encode(vehicleProps)
-				isFound = true
-				break
-			end		
+
+-- Funcoes para ter o guarda roupa dentro de casa
+ESX.RegisterServerCallback('rl_propriedades:getPlayerDressing', function(source, cb)
+	local xPlayer  = ESX.GetPlayerFromId(source)
+
+	TriggerEvent('esx_datastore:getDataStore', 'property', xPlayer.identifier, function(store)
+		local count  = store.count('dressing')
+		local labels = {}
+
+		for i=1, count, 1 do
+			local entry = store.get('dressing', i)
+			table.insert(labels, entry.label)
 		end
-		print(isFound)
-		cb(isFound)
-end)
 
-function getPlayerVehicles(identifier)
-	
-	local vehicles = {}
-	local data = MySQL.Sync.fetchAll("SELECT * FROM owned_vehicles WHERE owner=@identifier",{['@identifier'] = identifier})	
-	for _,v in pairs(data) do
-		local vehicle = json.decode(v.vehicle)
-		table.insert(vehicles, {id = v.id, plate = vehicle.plate})
-	end
-	return vehicles
-end
-
-function getHouseVehicles(propiedad)
-	--local cochera = 1
-	local vehiculos = {}
-	local data = MySQL.Sync.fetchAll("SELECT * FROM pk_casas WHERE propiedad=@propiedad",{['@propiedad'] = propiedad})	
-	for _,v in pairs(data) do
-		local vehicle = json.decode(v.vehicle)
-		local cords = json.decode(v.cordsvehiculo)
-		table.insert(vehiculos, {model = vehicle.model, plate = vehicle.plate, cords = cords, veh = vehicle})
-	end
-	return vehiculos
-end
-
-function getHouseAllVehicles()
-	local cochera = 2
-	local allvehiculos = {}
-	local data = MySQL.Sync.fetchAll("SELECT * FROM pk_casas WHERE cochera=@cochera",{['@cochera'] = cochera})	
-	for i,v in pairs(data) do
-		local vehicle = json.decode(v.vehicle)
-		local cords = json.decode(v.cordsvehiculo)
-		table.insert(allvehiculos, {model = vehicle.model, plate = vehicle.plate, cords = cords, veh = vehicle})
-	end
-	return allvehiculos
-end
-
-
-
-RegisterServerEvent("pk_casas:spawntodos")
-AddEventHandler("pk_casas:spawntodos", function()
-	if spawneados == false then
-		
-		local src = source
-        local vehicles = getHouseAllVehicles()
-		for _,v in pairs(vehicles) do
-				local modelodelauto	= v.model
-				local propiedades = v.veh
-				local x = v.cords.x
-				local y = v.cords.y
-				local z = v.cords.z
-				local h = v.cords.h
-				Citizen.Wait(1)
-				TriggerClientEvent('pk_garage:spawnautos', src,modelodelauto,propiedades, x, y, z -1, h)
-		end
-		spawneados = true
-	else
-		--print("ya spawneados")
-	end
-end)
-
-function getHouseVehicles1(propiedad)
-	--local cochera = 1
-	local vehiculos = {}
-	local data = MySQL.Sync.fetchAll("SELECT * FROM pk_casas WHERE cochera=@cochera",{['@cochera'] = 2})	
-	for _,v in pairs(data) do
-		local vehicle = json.decode(v.vehicle)
-		local cords = json.decode(v.cordsvehiculo)
-		table.insert(vehiculos, {model = vehicle.model, plate = vehicle.plate, cords = cords, veh = vehicle})
-	end
-	return vehiculos
-end
-
-RegisterServerEvent('pk_garage:guardarvehiculo')
-AddEventHandler('pk_garage:guardarvehiculo', function(vehicleProps,propiedad)
-	local isFound = false
-	local _source = source
-	local xPlayer = ESX.GetPlayerFromId(_source)
-	local vehicules = getPlayerVehicles(xPlayer.getIdentifier())
-	local plate = vehicleProps.plate
-	local encasa = 1
-	
-	for _,v in pairs(vehicules) do
-			if(plate == v.plate)then
-				local idveh = v.id
-				local vehprop = json.encode(vehicleProps)
-				local cochera = 2
-				MySQL.Sync.execute("UPDATE pk_casas SET vehicle =@vehicle WHERE propiedad=@propiedad",{['@vehicle'] = vehprop, ['@propiedad'] = propiedad})
-				MySQL.Sync.execute("UPDATE pk_casas SET cochera =@cochera WHERE propiedad=@propiedad",{['@cochera'] = cochera, ['@propiedad'] = propiedad})
-				isFound = true
-				break
-			end		
-		end
-end)
-
-RegisterServerEvent('pk_garage:sacarvehiculo')
-AddEventHandler('pk_garage:sacarvehiculo', function(propiedad, vehicle)
-	local isFound = false
-	local _source = source
-	local xPlayer = ESX.GetPlayerFromId(_source)
-	local vehicules = getPlayerVehicles(xPlayer.getIdentifier())
-	local plate = vehicle.plate
-	local encasa = 0
-	
-	for _,v in pairs(vehicules) do
-			if(plate == v.plate)then
-				local idveh = v.id
-				local vehprop = 0
-				local cochera = 1
-				MySQL.Sync.execute("UPDATE pk_casas SET vehicle =@vehicle WHERE propiedad=@propiedad",{['@vehicle'] = vehprop, ['@propiedad'] = propiedad})
-				MySQL.Sync.execute("UPDATE pk_casas SET cochera =@cochera WHERE propiedad=@propiedad",{['@cochera'] = cochera, ['@propiedad'] = propiedad})
-				isFound = true
-				break
-			end		
-		end
-end)
-
-
-RegisterServerEvent('pk_garage:mostrarvehiculos')
-AddEventHandler('pk_garage:mostrarvehiculos', function(propiedad)
-local src = source
-local vehicles = getHouseVehicles(propiedad)
-	
-		for _,v in pairs(vehicles) do
-				local modelodelauto	= v.model
-				local propiedades = v.veh
-				local x = v.cords.x
-				local y = v.cords.y
-				local z = v.cords.z
-				local h = v.cords.h
-				TriggerClientEvent('pk_garage:spawnautos', src,modelodelauto,propiedades, x, y, z, h)
-		end
-end)
-
-
-ESX.RegisterServerCallback('pk_garage:obtenergarage', function(source, cb, propiedad)
-	local _source = source
-	local xPlayer = ESX.GetPlayerFromId(_source)
-	local garage = {}
-
-	MySQL.Async.fetchAll("SELECT * FROM pk_casas WHERE propiedad=@propiedad",{['@propiedad'] = propiedad}, function(data) 
-		for _,v in pairs(data) do
-			local cords = json.decode(v.cordsvehiculo)
-			if v.vehicle == 0 then
-			local vehicle = 0
-			table.insert(garage, {cords = cords, cocheraestado = v.cochera, vehicle = vehicle})
-			elseif v.vehicle ~= 0 then
-			local vehicle = json.decode(v.vehicle)
-			table.insert(garage, {cords = cords, cocheraestado = v.cochera, vehicle = vehicle})
-			end
-		end
-		cb(garage)
+		cb(labels)
 	end)
 end)
 
--------------------------------- ARMARIO ----------------------------
-ESX.RegisterServerCallback('pk_casas:getInventoryV',function(source,cb,plate)
-  TriggerEvent('pk_casas:getSharedDataStore',plate,function(store)
-    local blackMoney = 0
-     local items      = {}
-     local weapons    = {}
-    weapons = (store.get('weapons') or {})
+ESX.RegisterServerCallback('rl_propriedades:getPlayerOutfit', function(source, cb, num)
+	local xPlayer  = ESX.GetPlayerFromId(source)
 
-    local blackAccount = (store.get('black_money')) or 0
-    if blackAccount ~=0 then
-      blackMoney = blackAccount[1].amount
-    end
-
-    local armario = (store.get('armario') or {})
-    for i=1,#armario,1 do
-      table.insert(items,{name=armario[i].name,count=armario[i].count,label=ESX.GetItemLabel(armario[i].name)})
-    end
-
-    cb({
-    blackMoney = blackMoney,
-    items      = items,
-    weapons    = weapons,
-    })
-  end)
+	TriggerEvent('esx_datastore:getDataStore', 'property', xPlayer.identifier, function(store)
+		local outfit = store.get('dressing', num)
+		cb(outfit.skin)
+	end)
 end)
 
+RegisterServerEvent('rl_propriedades:removeOutfit')
+AddEventHandler('rl_propriedades:removeOutfit', function(label)
+	local xPlayer = ESX.GetPlayerFromId(source)
 
-ESX.RegisterServerCallback('pk_casas:getInventoryV1',function(source,cb,propiedad)
-  TriggerEvent('pk_casas:getSharedDataStore1',propiedad,function(store)
-    local blackMoney = 0
-     local items      = {}
-     local weapons    = {}
-    weapons = (store.get('weapons') or {})
+	TriggerEvent('esx_datastore:getDataStore', 'property', xPlayer.identifier, function(store)
+		local dressing = store.get('dressing') or {}
 
-    local blackAccount = (store.get('black_money')) or 0
-    if blackAccount ~=0 then
-      blackMoney = blackAccount[1].amount
-    end
-
-    local armario = (store.get('armario') or {})
-    for i=1,#armario,1 do
-      table.insert(items,{name=armario[i].name,count=armario[i].count,label=ESX.GetItemLabel(armario[i].name)})
-    end
-  end)
+		table.remove(dressing, label)
+		store.set('dressing', dressing)
+	end)
 end)
-	
-RegisterServerEvent('pk_casas:getItem')
-AddEventHandler('pk_casas:getItem', function(propiedad, type, item, count)
 
-  local _source = source
-  local xPlayer      = ESX.GetPlayerFromId(_source)
-  local _target = target
+--funcões para ligar cofre ao inventoryhud
+ESX.RegisterServerCallback('rl_propriedades:getPlayerInventory', function(source, cb)
+	local xPlayer    = ESX.GetPlayerFromId(source)
+	local blackMoney = xPlayer.getAccount('black_money').money
+	local money = xPlayer.getAccount('money').money
+	local items      = xPlayer.inventory
 
-  if type == 'item_standard' then
-	  local itemLimit = xPlayer.getInventoryItem(item).limit
-	  local sourceItemCount = xPlayer.getInventoryItem(item).count
-  
-    TriggerEvent('pk_casas:getSharedDataStore', propiedad, function(store)
-      local armario = (store.get('armario') or {})
-      for i=1, #armario,1 do
-        if armario[i].name == item then
-          if (armario[i].count >= count and count > 0) then
-		  
-		  if itemLimit ~= -1 and (sourceItemCount + count) > itemLimit then
-          TriggerClientEvent('esx:showNotification', _source, "No tienes mas espacio en el inventario")
-		  else
-            xPlayer.addInventoryItem(item, count)
-            if (armario[i].count - count) == 0 then
-              table.remove(armario,i)
-            else
-              armario[i].count = armario[i].count - count
-            end
-            break
+	cb({
+		blackMoney = blackMoney,
+		items      = items,
+		money = money,
+		weapons    = xPlayer.getLoadout()
+	})
+end)
+
+ESX.RegisterServerCallback('rl_propriedades:getPropertyInventory', function(source, cb, owner, propertyName)
+	local xPlayer = ESX.GetPlayerFromIdentifier(owner)
+	local blackMoney = 0
+	local money = 0
+	local items      = {}
+	local weapons    = {}
+
+	TriggerEvent('esx_addonaccount:getAccount', 'property_black_money', xPlayer.identifier, function(account)
+		blackMoney = account.money
+	end)
+
+	TriggerEvent('esx_addonaccount:getAccount', 'property_money', xPlayer.identifier, function(account)
+		money = account.money
+	end)
+
+	TriggerEvent('esx_addoninventory:getInventory', 'property', xPlayer.identifier, function(inventory)
+		items = inventory.items
+	end)
+
+	TriggerEvent('esx_datastore:getDataStore', 'property', xPlayer.identifier, function(store)
+		weapons = store.get('weapons') or {}
+	end)
+
+	cb({
+		blackMoney = blackMoney,
+		items      = items,
+		money = money,
+		weapons    = weapons
+	})
+end)
+
+RegisterNetEvent('esx_property:getItem')
+AddEventHandler('esx_property:getItem', function(owner, type, item, count)				
+	local xPlayer = ESX.GetPlayerFromId(source)
+	local xPlayerOwner = ESX.GetPlayerFromIdentifier(owner)
+	if type == 'item_standard' then
+		TriggerEvent('esx_addoninventory:getInventory', 'property', xPlayerOwner.identifier, function(inventory)
+			local inventoryItem = inventory.getItem(item)
+			-- is there enough in the property?
+			if count > 0 and inventoryItem.count >= count then
+   
+				-- can the player carry the said amount of x item?
+				if xPlayer.canCarryItem(item, count) then
+					inventory.removeItem(item, count)
+					xPlayer.addInventoryItem(item, count)
+				else
+					xPlayer.showNotification(_U('player_cannot_hold'))
+				end
+			else
+				xPlayer.showNotification(_U('not_enough_in_property'))
 			end
-          else
-            TriggerClientEvent('esx:showNotification', _source, '~r~Cantidad Invalida')
-			
-          end
-        end
-      end
+		end)
 
+	elseif type == 'item_account' then
 
-      store.set('armario',armario)
-    end)
-  end
+		TriggerEvent('esx_addonaccount:getAccount', 'property_' .. item, xPlayerOwner.identifier, function(account)
+			if account.money >= count then
 
-  if type == 'item_account' then
+									
+				account.removeMoney(count)
+				xPlayer.addAccountMoney(item, count)
+			else
+				xPlayer.showNotification(_U('amount_invalid'))
+			end
+		end)
 
-    TriggerEvent('pk_casas:getSharedDataStore', propiedad, function(store)
+	elseif type == 'item_weapon' then
 
-      local blackMoney = store.get('black_money')
-      if (blackMoney[1].amount >= count and count > 0) then
-        blackMoney[1].amount = blackMoney[1].amount - count
-        store.set('black_money', blackMoney)
-        xPlayer.addAccountMoney(item, count)
-      else
-        TriggerClientEvent('esx:showNotification', _source,'Monto Invalido')
-      end
-    end)
+		TriggerEvent('esx_datastore:getDataStore', 'property', xPlayerOwner.identifier, function(store)
+			local storeWeapons = store.get('weapons') or {}
+			local weaponName   = nil
+			local ammo         = nil
 
-  end
+			for i=1, #storeWeapons, 1 do
+				if storeWeapons[i].name == item then
+					weaponName = storeWeapons[i].name
+					ammo       = storeWeapons[i].ammo
 
-  if type == 'item_weapon' then
+					table.remove(storeWeapons, i)
+					break
+				end
+			end
 
-    TriggerEvent('pk_casas:getSharedDataStore',  propiedad, function(store)
+			store.set('weapons', storeWeapons)
+			xPlayer.addWeapon(weaponName, ammo)											 
+		end)
 
-      local storeWeapons = store.get('weapons')
-
-      if storeWeapons == nil then
-        storeWeapons = {}
-      end
-
-      local weaponName   = nil
-      local ammo         = nil
-
-      for i=1, #storeWeapons, 1 do
-        if storeWeapons[i].name == item then
-
-          weaponName = storeWeapons[i].name
-          ammo       = storeWeapons[i].ammo
-
-          table.remove(storeWeapons, i)
-
-          break
-        end
-      end
-
-      store.set('weapons', storeWeapons)
-
-      xPlayer.addWeapon(weaponName, ammo)
-
-    end)
-
-  end
-
+	end
 end)
 
-RegisterServerEvent('pk_casas:putItem')
-AddEventHandler('pk_casas:putItem', function(propiedad, type, item, count,max)
+RegisterNetEvent('esx_property:putItem')
+AddEventHandler('esx_property:putItem', function(owner, type, item, count)
+							
+	local xPlayer = ESX.GetPlayerFromId(source)
+	local xPlayerOwner = ESX.GetPlayerFromIdentifier(owner)
 
-  local _source      = source
-  local xPlayer      = ESX.GetPlayerFromId(_source)
-  local xPlayerOwner = ESX.GetPlayerFromIdentifier(owner)
+	if type == 'item_standard' then
 
-  if type == 'item_standard' then
+		local playerItemCount = xPlayer.getInventoryItem(item).count
 
-    local playerItemCount = xPlayer.getInventoryItem(item).count
+		if playerItemCount >= count and count > 0 then
+			TriggerEvent('esx_addoninventory:getInventory', 'property', xPlayerOwner.identifier, function(inventory)
+				xPlayer.removeInventoryItem(item, count)
+				inventory.addItem(item, count)											
+			end)
+		else
+			xPlayer.showNotification(_U('invalid_quantity'))
+		end
 
-    if (playerItemCount >= count and count > 0 )then
+	elseif type == 'item_account' then
 
+		if xPlayer.getAccount(item).money >= count and count > 0 then
 
-      TriggerEvent('pk_casas:getSharedDataStore', propiedad, function(store)
-        local found = false
-        local armario = (store.get('armario') or {})
+												   
+			xPlayer.removeAccountMoney(item, count)
 
+			TriggerEvent('esx_addonaccount:getAccount', 'property_' .. item, xPlayerOwner.identifier, function(account)
+				account.addMoney(count)
+			end)
+		else
+			xPlayer.showNotification(_U('amount_invalid'))
+		end
 
-        for i=1,#armario,1 do
-          if armario[i].name == item then
-            armario[i].count = armario[i].count + count
-            found = true
-          end
-        end
-        if not found then
-          table.insert(armario, {
-            name = item,
-            count = count
-          })
-        end
+	elseif type == 'item_weapon' then
+		if xPlayer.hasWeapon(item) then
+			xPlayer.removeWeapon(item)
 
-          store.set('armario', armario)
-          xPlayer.removeInventoryItem(item, count)
-      end)
+			TriggerEvent('esx_datastore:getDataStore', 'property', xPlayerOwner.identifier, function(store)
+				local storeWeapons = store.get('weapons') or {}
 
-    else
-      TriggerClientEvent('esx:showNotification', _source, 'Cantidad Invalida')
-    end
-
-  end
-
-  if type == 'item_account' then
-
-    local playerAccountMoney = xPlayer.getAccount(item).money
-
-
-    if (playerAccountMoney >= count and count > 0) then
-
-
-      TriggerEvent('pk_casas:getSharedDataStore', propiedad , function(store)
-
-        local blackMoney = (store.get('black_money') or nil)
-        if blackMoney ~= nil then
-          blackMoney[1].amount = blackMoney[1].amount + count
-        else
-          blackMoney = {}
-          table.insert(blackMoney,{amount=count})
-        end
-
-          xPlayer.removeAccountMoney(item, count)
-          store.set('black_money', blackMoney)
-      end)
-
-    else
-      TriggerClientEvent('esx:showNotification', _source, 'Monto Invalido')
-    end
-
-  end
-
-  if type == 'item_weapon' then
-
-    TriggerEvent('pk_casas:getSharedDataStore', propiedad, function(store)
-
-      local storeWeapons = store.get('weapons')
-
-      if storeWeapons == nil then
-        storeWeapons = {}
-      end
-
-      table.insert(storeWeapons, {
-        name = item,
-        ammo = count
-      })
-
-        store.set('weapons', storeWeapons)
-        xPlayer.removeWeapon(item)
-    end)
-
-  end
-
+				table.insert(storeWeapons, {
+					name = item,
+					ammo = count
+				})
+				store.set('weapons', storeWeapons)											
+			end)
+		end
+	end
 end)
-
-ESX.RegisterServerCallback('pk_casas:getPlayerInventory', function(source, cb)
-
-  local xPlayer    = ESX.GetPlayerFromId(source)
-  local blackMoney = xPlayer.getAccount('black_money').money
-  local items      = xPlayer.inventory
-
-  cb({
-    blackMoney = blackMoney,
-    items      = items
-  })
-
-end)
-
 	
